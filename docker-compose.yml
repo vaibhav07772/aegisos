@@ -1,0 +1,50 @@
+# ═══════════════════════════════════════════════
+# AegisOS — Multi-Service Deployment
+# ═══════════════════════════════════════════════
+version: "3.9"
+
+services:
+  # ─── FastAPI Server ───
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aegisos-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./sandbox:/app/sandbox
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── Streamlit UI ───
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aegisos-ui
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - API_URL=http://api:8000
+    command: >
+      streamlit run streamlit_app.py
+      --server.port=8501
+      --server.address=0.0.0.0
+      --server.headless=true
+    depends_on:
+      - api
+    restart: unless-stopped

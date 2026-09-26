@@ -3,7 +3,8 @@ import streamlit as st
 import requests
 import time
 
-API_URL = "http://localhost:8000"
+import os
+API_URL = os.getenv("API_URL", "http://localhost:8000")
 
 st.set_page_config(page_title="AegisOS", page_icon="🛡️", layout="wide")
 
