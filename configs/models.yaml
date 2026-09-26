@@ -1,0 +1,124 @@
+# AegisOS Groq Model Registry (Updated - Sept 2026)
+# llama-3.1-8b and llama-3.3-70b are DECOMMISSIONED
+# Replacements: gpt-oss-20b and gpt-oss-120b
+
+models:
+  groq-gpt-oss-20b:
+    provider: groq
+    name: "openai/gpt-oss-20b"
+    tier: "small"
+    max_tokens: 32000
+    strengths:
+      - "fast"
+      - "simple_tasks"
+      - "classification"
+      - "routing"
+      - "code_generation"
+    weaknesses:
+      - "advanced_reasoning"
+    rate_limit_tpm: 8000
+
+  groq-gpt-oss-120b:
+    provider: groq
+    name: "openai/gpt-oss-120b"
+    tier: "large"
+    max_tokens: 32000
+    strengths:
+      - "complex_reasoning"
+      - "multi_step_planning"
+      - "code_generation"
+      - "analysis"
+      - "tool_use"
+    weaknesses:
+      - "slower"
+      - "rate_limited"
+    rate_limit_tpm: 8000
+
+  groq-qwen-27b:
+    provider: groq
+    name: "qwen/qwen3.6-27b"
+    tier: "medium"
+    max_tokens: 32000
+    strengths:
+      - "balanced"
+      - "reasoning"
+      - "code_generation"
+    weaknesses:
+      - "newer"
+    rate_limit_tpm: 8000
+
+  groq-llama-4-scout:
+    provider: groq
+    name: "meta-llama/llama-4-scout-17b-16e-instruct"
+    tier: "medium"
+    max_tokens: 32000
+    strengths:
+      - "long_context"
+      - "research"
+      - "modern"
+    weaknesses:
+      - "newer"
+    rate_limit_tpm: 30000
+
+  groq-kimi-k2:
+    provider: groq
+    name: "moonshotai/kimi-k2-instruct"
+    tier: "large"
+    max_tokens: 128000
+    strengths:
+      - "long_context"
+      - "research"
+      - "document_analysis"
+    weaknesses:
+      - "limited_availability"
+    rate_limit_tpm: 10000
+
+task_types:
+  simple_qa:
+    complexity: "low"
+    preferred_models: ["groq-gpt-oss-20b", "groq-qwen-27b"]
+    requires_tools: false
+    risk_level: "low"
+    est_tokens: 500
+
+  code_generation:
+    complexity: "medium"
+    preferred_models: ["groq-gpt-oss-120b", "groq-qwen-27b"]
+    requires_tools: true
+    risk_level: "medium"
+    est_tokens: 4000
+
+  code_review:
+    complexity: "high"
+    preferred_models: ["groq-gpt-oss-120b"]
+    requires_tools: true
+    risk_level: "high"
+    est_tokens: 6000
+
+  complex_analysis:
+    complexity: "high"
+    preferred_models: ["groq-gpt-oss-120b", "groq-qwen-27b"]
+    requires_tools: false
+    risk_level: "medium"
+    est_tokens: 5000
+
+  research:
+    complexity: "high"
+    preferred_models: ["groq-kimi-k2", "groq-gpt-oss-120b"]
+    requires_tools: true
+    risk_level: "low"
+    est_tokens: 8000
+
+  automation:
+    complexity: "medium"
+    preferred_models: ["groq-gpt-oss-120b", "groq-gpt-oss-20b"]
+    requires_tools: true
+    risk_level: "high"
+    est_tokens: 3000
+
+  routing:
+    complexity: "low"
+    preferred_models: ["groq-gpt-oss-20b"]
+    requires_tools: false
+    risk_level: "low"
+    est_tokens: 200

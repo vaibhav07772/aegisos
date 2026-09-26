@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+
+# Environment
+.env
+.env.local
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Data
+data/*.json
+logs/*.log
+reports/*.json
+!logs/.gitkeep
+!reports/.gitkeep
+!data/.gitkeep
+
+# Cache
+.cache/
+.streamlit/
+
+# OS
+.DS_Store
+Thumbs.db
