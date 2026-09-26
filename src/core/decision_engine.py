@@ -1,4 +1,4 @@
-"""Decision Engine — Jev-style routing"""
+"""Decision Engine — Jev-style routing with complexity + rate limit awareness"""
 import uuid
 import logging
 from datetime import datetime
@@ -8,6 +8,7 @@ from rich.console import Console
 from src.core.model_registry import ModelRegistry, ModelInfo, TaskType
 from src.core.intent_analyzer import Intent
 from src.core.decision_log import DecisionLog, render_decision_log
+from src.core.rate_limiter import RateLimiter
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -18,10 +19,11 @@ class DecisionEngine:
     
     def __init__(self, registry: Optional[ModelRegistry] = None):
         self.registry = registry or ModelRegistry()
-        console.print("[cyan]Decision Engine initialized[/cyan]")
+        self.limiter = RateLimiter()
+        console.print("[cyan]Decision Engine initialized (rate limit aware)[/cyan]")
     
     def decide(self, query: str, intent: Intent) -> DecisionLog:
-        """Main decision logic"""
+        """Main decision logic with rate limit awareness"""
         
         # 1. Get task type config
         task_config = self.registry.get_task_type(intent.task_type)
@@ -29,20 +31,60 @@ class DecisionEngine:
             logger.warning(f"Unknown task type: {intent.task_type}, using default")
             task_config = self.registry.get_task_type("simple_qa")
         
-        # 2. Select best model
-        selected_model = self._select_model(intent, task_config)
-        fallback_model = self._select_fallback(intent, task_config, selected_model)
+        # 2. Get complexity-aware preferred models
+        preferred = task_config.get_preferred(intent.complexity)
         
-        # 3. Compute rate limit impact
+        # 3. Select model with rate limit awareness
+        selected_model = None
+        selection_notes = []
+        
+        for model_id in preferred:
+            model = self.registry.get_model(model_id)
+            if not model:
+                continue
+            
+            # Check max_tokens
+            if intent.estimated_tokens > model.max_tokens:
+                selection_notes.append(f"{model_id}: exceeds max_tokens")
+                continue
+            
+            # Check rate limit
+            capacity = self.limiter.check_capacity(model_id, intent.estimated_tokens)
+            if not capacity["can_proceed"]:
+                selection_notes.append(f"{model_id}: rate limited")
+                continue
+            
+            selected_model = model
+            if capacity["usage_pct"] >= 80:
+                selection_notes.append(f"{model_id}: {capacity['usage_pct']:.0f}% used")
+            break
+        
+        # Fallback if nothing selected
+        if selected_model is None:
+            selected_model = self.registry.get_model("groq-gpt-oss-20b")
+            selection_notes.append("fallback to default")
+        
+        # 4. Select fallback (next available)
+        fallback_model = None
+        for model_id in preferred:
+            if model_id != selected_model.id:
+                model = self.registry.get_model(model_id)
+                if model and intent.estimated_tokens <= model.max_tokens:
+                    fallback_model = model
+                    break
+        
+        # 5. Compute rate limit impact
         quota_impact = (intent.estimated_tokens / selected_model.rate_limit_tpm) * 100
         
-        # 4. Project cost (if using GPT-4, ~$0.005/1K tokens)
+        # 6. Project cost (if using GPT-4)
         projected_cost = (intent.estimated_tokens / 1000) * 0.005
         
-        # 5. Build selection reason
+        # 7. Build reason
         reason = self._build_reason(intent, selected_model)
+        if selection_notes:
+            reason += " | " + " | ".join(selection_notes)
         
-        # 6. Create decision log
+        # 8. Create decision log
         log = DecisionLog(
             user_query=query,
             task_type=intent.task_type,
@@ -65,43 +107,22 @@ class DecisionEngine:
         
         return log
     
-    def _select_model(self, intent: Intent, task_config: TaskType) -> ModelInfo:
-        """Select best model based on intent + task config"""
-        for model_id in task_config.preferred_models:
-            model = self.registry.get_model(model_id)
-            if model:
-                if intent.estimated_tokens <= model.max_tokens:
-                    return model
-        
-        # Fallback to first preferred
-        return self.registry.get_model(task_config.preferred_models[0])
-    
-    def _select_fallback(self, intent: Intent, task_config: TaskType,
-                          selected: ModelInfo) -> Optional[ModelInfo]:
-        """Select fallback model"""
-        for model_id in task_config.preferred_models:
-            if model_id != selected.id:
-                model = self.registry.get_model(model_id)
-                if model:
-                    return model
-        return None
-    
     def _build_reason(self, intent: Intent, model: ModelInfo) -> str:
         """Build human-readable reason"""
         reasons = []
         
-        if model.tier == "large":
-            reasons.append(f"{intent.complexity} complexity requires large model")
-        elif model.tier == "medium":
-            reasons.append("balanced task - medium model sufficient")
+        if intent.complexity == "high":
+            reasons.append(f"high complexity -> {model.tier} model")
+        elif intent.complexity == "medium":
+            reasons.append(f"medium complexity -> {model.tier} model")
         else:
-            reasons.append("simple task - fast model optimal")
+            reasons.append(f"low complexity -> {model.tier} model")
         
         if intent.requires_tools:
             reasons.append("tool use required")
         
         if intent.risk_level == "high":
-            reasons.append("high-risk task needs reliable model")
+            reasons.append("high-risk needs reliable model")
         
         return " | ".join(reasons)
 
@@ -110,7 +131,7 @@ if __name__ == "__main__":
     from src.core.intent_analyzer import IntentAnalyzer
     
     console.print("\n" + "="*70)
-    console.print("[bold magenta]AegisOS Decision Engine - Test[/bold magenta]")
+    console.print("[bold magenta]AegisOS Decision Engine - Full Test[/bold magenta]")
     console.print("="*70)
     
     analyzer = IntentAnalyzer()

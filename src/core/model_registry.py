@@ -19,10 +19,27 @@ class ModelInfo(BaseModel):
 class TaskType(BaseModel):
     name: str
     complexity: str
-    preferred_models: List[str]
+    preferred_models_low: List[str] = []
+    preferred_models_medium: List[str] = []
+    preferred_models_high: List[str] = []
     requires_tools: bool
     risk_level: str
     est_tokens: int
+    
+    def get_preferred(self, complexity: str) -> List[str]:
+        """Get preferred models based on complexity level"""
+        mapping = {
+            "low": self.preferred_models_low,
+            "medium": self.preferred_models_medium,
+            "high": self.preferred_models_high,
+        }
+        # Fallback chain: requested → medium → any available
+        result = mapping.get(complexity, [])
+        if not result:
+            result = self.preferred_models_medium
+        if not result:
+            result = self.preferred_models_low or self.preferred_models_high
+        return result
 
 
 class ModelRegistry:
@@ -61,7 +78,7 @@ if __name__ == "__main__":
     registry = ModelRegistry()
     
     # Models table
-    table = Table(title="🤖 AegisOS Model Registry (Groq)")
+    table = Table(title="AegisOS Model Registry (Groq)")
     table.add_column("ID", style="cyan")
     table.add_column("Groq Name", style="white")
     table.add_column("Tier", style="yellow")
@@ -78,23 +95,22 @@ if __name__ == "__main__":
     console.print(table)
     console.print()
     
-    # Task types table
-    table2 = Table(title="📋 Task Routing Rules")
+    # Task types table — show all 3 complexity levels
+    table2 = Table(title="Task Routing Rules (Complexity-Aware)")
     table2.add_column("Task", style="cyan")
-    table2.add_column("Complexity", style="yellow")
-    table2.add_column("Preferred Models", style="green")
-    table2.add_column("Risk", style="red")
-    table2.add_column("Est Tokens", style="white")
+    table2.add_column("Low", style="green")
+    table2.add_column("Medium", style="yellow")
+    table2.add_column("High", style="red")
     
     for t in registry.task_types.values():
         table2.add_row(
-            t.name, t.complexity,
-            ", ".join(t.preferred_models[:2]),
-            t.risk_level,
-            str(t.est_tokens)
+            t.name,
+            t.preferred_models_low[0] if t.preferred_models_low else "-",
+            t.preferred_models_medium[0] if t.preferred_models_medium else "-",
+            t.preferred_models_high[0] if t.preferred_models_high else "-",
         )
     
     console.print(table2)
     
-    console.print(f"\n✅ Total models: {len(registry.models)}")
-    console.print(f"✅ Total task types: {len(registry.task_types)}")
+    console.print(f"\nTotal models: {len(registry.models)}")
+    console.print(f"Total task types: {len(registry.task_types)}")
